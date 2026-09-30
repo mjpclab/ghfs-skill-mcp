@@ -1,9 +1,9 @@
 ---
-name: ghfs
-description: Use when installing or starting a GHFS (Go HTTP File Server) instance, or when listing, uploading, downloading, creating, deleting, or archiving files on a local or remote GHFS server over HTTP.
+name: ghfs-client
+description: Use when listing, uploading, downloading, creating, deleting, or archiving files on a local or remote GHFS (Go HTTP File Server) instance over HTTP.
 ---
 
-# GHFS
+# Using a GHFS server
 
 ## Overview
 
@@ -20,146 +20,34 @@ Two rules cover most mistakes:
   urlencoded; `upload` is multipart. Getting this wrong reports success and does
   nothing.
 
-## Part 1 — Installing GHFS
+## Finding the server and what it allows
 
-Check whether it is already there before installing anything:
+Use the base URL you were given. For a server already running on this machine,
+`ps -eo pid,args | grep ghfs` shows its listen address in the `-l` or
+`--listen-tls` argument; with neither, it is on port 80. Starting or installing a server is covered by the
+`ghfs-server` skill.
 
-```bash
-command -v ghfs && ghfs --version
-```
+Every listing carries `canUpload`, `canMkdir`, `canDelete`, and `canArchive` for
+that exact directory. **Read them before attempting a write.** They vary per
+directory, so check the directory you intend to write to, not the root.
 
-Three ways to install it, in order of preference.
+Scoped flags cover the whole subtree under their path. A `false` here is fixed
+only by restarting the server with a different flag. It
+cannot be worked around with a different request. Tell whoever runs the server
+which flag is missing:
 
-### 1. go install
+| Flag in listing | Server needs |
+|---|---|
+| `canUpload` | `-U`, or `-u <path>` |
+| `canMkdir` | `--global-mkdir`, or `--mkdir <path>` |
+| `canDelete` | `--global-delete`, or `--delete <path>` |
+| `canArchive` | `-A`, or `--archive <path>` |
 
-```bash
-go install mjpclab.dev/ghfs@latest
-```
+For an HTTPS server, use the hostname the certificate is issued for, so
+verification passes without `curl -k`. A plain `http://` request to a TLS port
+gets HTTP 400.
 
-The module path is `mjpclab.dev/ghfs`, not the GitHub URL. The binary lands in
-`$(go env GOPATH)/bin`, which has to be on your `PATH`. Set `GOBIN` to put it
-somewhere else, such as a directory you can write to without root:
-
-```bash
-GOBIN=/somewhere/bin go install mjpclab.dev/ghfs@latest
-```
-
-### 2. Build from source
-
-```bash
-git clone --depth 1 https://github.com/mjpclab/go-http-file-server.git
-cd go-http-file-server
-go build .
-```
-
-Both of these report `Version: dev`, because the real version is stamped in at
-release time rather than compiled from the source tree. Run
-`bash build/build-current.sh` instead if you want a versioned build; it writes a
-release-style archive into `output/`.
-
-### 3. Prebuilt binary
-
-Last resort. Releases are at
-<https://github.com/mjpclab/go-http-file-server/releases>, with assets named
-`ghfs-<version>-<os>-<arch>.tar.gz`, or `.zip` for Windows. Builds cover macOS,
-Linux, FreeBSD, and Windows across amd64, arm64, and several other
-architectures.
-
-**On macOS, prefer one of the first two methods.** The release binaries are
-neither signed nor notarized, so Gatekeeper refuses to run them.
-
-If a prebuilt binary is the only option on macOS, download it with `curl` rather
-than through a browser. Browsers tag downloads with a quarantine attribute and
-`curl` does not, so this avoids the problem instead of having to undo it.
-
-A binary that is already quarantined makes macOS report that it cannot be opened
-because the developer cannot be verified. **Fetching the same release asset
-again with `curl` is the fix**, and it needs no special permission, because the
-fresh copy is never tagged in the first place. Replace the blocked file with it.
-
-Only when re-downloading is impossible does the attribute have to be cleared,
-and **you do not clear it yourself**. Show the person this command and let them
-run it:
-
-```bash
-xattr -d com.apple.quarantine /path/to/ghfs
-```
-
-Clearing quarantine is a decision to trust unsigned code off the internet. That
-belongs to whoever owns the machine, not to the agent working on it.
-
-## Part 2 — Starting a server locally
-
-**GHFS is read-only by default.** Writing, deleting, and archiving each have to
-be enabled explicitly when the process starts. An agent that starts a server
-without these flags cannot upload to it afterwards.
-
-| Capability | Everywhere | Only under a URL path |
-|---|---|---|
-| Upload | `-U` | `-u /ttt` |
-| Create directory | `--global-mkdir` | `--mkdir /ttt` |
-| Delete | `--global-delete` | `--delete /ttt` |
-| Download as archive | `-A` | `--archive /ttt` |
-
-Other flags worth knowing: `-r <dir>` sets the served root (default `.`),
-`-l <addr:port>` sets the listen address, `-L -` writes the access log to stdout,
-`--user name:password` with `--global-auth` turns on Basic Auth.
-
-**The IP in `-l` decides who can reach the server.** A value without an IP, such
-as `8080` or `:8080`, listens on every IPv4 and IPv6 interface, so other
-machines can connect. `0.0.0.0` covers IPv4 only and `[::]` IPv6 only. For a
-server only this machine should use, such as a scratch server, bind
-`127.0.0.1:<port>`. Leave the IP out only when other machines are meant to
-reach it.
-
-**Always give a port.** Without one it uses 80, or 443 with TLS, and leaving
-`-l` out entirely means `:80`. A non-root user usually cannot bind either.
-
-A scratch server with everything enabled:
-
-```bash
-ghfs -r /path/to/serve -l 127.0.0.1:8080 -U --global-mkdir --global-delete -A -L - &
-```
-
-A safer shape, where only `/ttt` is writable and the rest is read-only:
-
-```bash
-ghfs -r /path/to/serve -l 127.0.0.1:8080 -u /ttt --mkdir /ttt --delete /ttt --archive /ttt &
-```
-
-Confirm it is up, and see what you are allowed to do, with a single request:
-
-```bash
-curl -s -H 'Accept: application/json' http://127.0.0.1:8080/
-```
-
-The listing carries `canUpload`, `canMkdir`, `canDelete`, and `canArchive` for
-that exact path. Read them before attempting a write. They vary per directory,
-so check the directory you intend to write to, not the root.
-
-### Serving over HTTPS
-
-Pass a certificate and key. `-l` then serves TLS on that port, and a plain HTTP
-request to it gets HTTP 400. `--listen-tls` forces TLS and `--listen-plain`
-forces cleartext even when certs are supplied.
-
-```bash
-ghfs -r /path/to/serve --listen-tls 8443 \
-  -c /path/to/server.crt -k /path/to/server.key &
-```
-
-This example gives no IP, so it listens on all interfaces. That is usually what
-a server with a real certificate wants. For a local-only TLS server, use
-`--listen-tls 127.0.0.1:8443`.
-
-Reach it by the hostname the certificate is issued for, so verification passes
-without `-k`.
-
-To use a server someone else started, find it with
-`ps -eo pid,args | grep ghfs`. A system instance is often driven by a config
-file such as `/etc/ghfs.conf`, one flag per line.
-
-## Part 3 — Talking to a server over HTTP
+## Talking to a server over HTTP
 
 Everything below works the same against a local or a remote instance. Only the
 base URL changes.
@@ -227,10 +115,15 @@ folder.
 curl -s -H 'Accept: application/json' -X POST \
   -F 'file=@notes.txt;filename=notes.txt' "$BASE/reports/?upload"
 
-# creates /reports/2024/ automatically in the same request
+# creates /reports/2024/ in the same request (needs canMkdir too)
 curl -s -H 'Accept: application/json' -X POST \
   -F 'dirfile=@q1.txt;filename=2024/q1.txt' "$BASE/reports/?upload"
 ```
+
+**Creating those directories needs `canMkdir` as well as `canUpload`.** Without
+it, a `dirfile` upload whose path names a directory that does not exist yet
+returns HTTP 500 with `{"success":false}` and writes nothing. A `dirfile` path
+into directories that already exist needs only `canUpload`.
 
 Post to a directory that already exists and encode the new subdirectories in the
 filename. Posting to a URL whose directory does not exist yet returns HTTP 400,
@@ -273,6 +166,8 @@ listing rather than the response body.
   body is an ordinary directory listing with no `success` field in it; a denied
   archive returns HTML. Neither shape contains an error message worth parsing.
 - Deleting a name that does not exist returns `{"success":true}`.
+- A `dirfile` upload that would create a directory without mkdir permission
+  returns HTTP 500 and `{"success":false}`.
 
 After any write, re-list the directory and confirm the expected entry.
 
@@ -294,6 +189,7 @@ of HTML and 782 bytes of JSON.
 | `-F name=x` for mkdir or delete | HTTP 200, `{"success":true}`, nothing created | `--data 'name=x'` |
 | `file` field with a `/` in the filename | path stripped, file lands flat | use `dirfile` |
 | `innerdirfile` to keep the full path | first path segment silently dropped | use `dirfile` |
+| `dirfile` into new directories with `canMkdir` false | HTTP 500, nothing written | ask for mkdir to be enabled, or upload only into existing directories |
 | POST to a not-yet-existing directory | HTTP 400 | POST to the parent, put the subpath in the filename |
-| Treating HTTP 400 as a bad request to retry | it usually means the operation is not permitted there | check `can*` in the listing, restart the server with the right flag |
+| Treating HTTP 400 as a bad request to retry | it usually means the operation is not permitted there | check `can*` in the listing; if false, the server has to be restarted with the flag |
 | `Accept: application/json` when downloading a file | returns the file's metadata, not its content | omit the header for file downloads |

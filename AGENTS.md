@@ -6,21 +6,24 @@ Guidance for agents working in this repository.
 
 Two independent ways to let an agent drive [GHFS](https://github.com/mjpclab/go-http-file-server):
 
-- `skills/ghfs/SKILL.md` — an agent skill documenting GHFS itself (install, start, HTTP API). Plain Markdown, no build step.
-- `mcp/` — a Go MCP server wrapping the same operations as typed tools.
+- `skills/` — agent skills, plain Markdown, no build step. They are split because running a server and using one are usually done by different people:
+  - `skills/ghfs-client/SKILL.md` — using a running GHFS over its HTTP API.
+  - `skills/ghfs-server/SKILL.md` — installing GHFS and starting an instance.
+- `mcp/` — a Go MCP server wrapping the same operations as `skills/ghfs-client/` as typed tools.
 
-The two are deliberately separate. A change to how GHFS behaves usually needs to land in **both**.
+The skills and the MCP server are deliberately separate. `mcp/` covers the same ground as `skills/ghfs-client/`, so a change to how GHFS's HTTP API behaves usually needs to land in **both**. `skills/ghfs-client/` also lists which server flag enables each `can*` permission; keep that table in step with `skills/ghfs-server/`.
 
 ## Layout
 
 ```
-skills/ghfs/SKILL.md   the skill
-mcp/go.mod             module root
-mcp/main.go            entry point, flag parsing, stdio/http mode
-mcp/server/ghfs.go     GHFS HTTP client
-mcp/server/tools.go    MCP tool definitions
-mcp/server/handler.go  tool call handlers
-mcp/server/server.go   server construction, debug middleware
+skills/ghfs-client/SKILL.md   using a server
+skills/ghfs-server/SKILL.md   installing and starting a server
+mcp/go.mod                    module root
+mcp/main.go                   entry point, flag parsing, stdio/http mode
+mcp/server/ghfs.go            GHFS HTTP client
+mcp/server/tools.go           MCP tool definitions
+mcp/server/handler.go         tool call handlers
+mcp/server/server.go          server construction, debug middleware
 ```
 
 ## Build
@@ -51,7 +54,7 @@ GHFS is read-only by default. Omitting `-U --global-mkdir --global-delete -A` gi
 - `mkdir` and `delete` are urlencoded, `upload` is multipart. Sending the wrong encoding returns HTTP 200 and `{"success":true}` while doing nothing.
 - Uploads with a `/` in the path use the `dirfile` form field, which creates intermediate directories. `file` strips the path entirely.
 
-`skills/ghfs/SKILL.md` covers these in full; read it before touching `mcp/server/ghfs.go`.
+`skills/ghfs-client/SKILL.md` covers these in full; read it before touching `mcp/server/ghfs.go`.
 
 ## When changing tools
 

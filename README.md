@@ -2,25 +2,30 @@
 
 Two ways to let an AI assistant drive [GHFS (Go HTTP File Server)](https://github.com/mjpclab/go-http-file-server):
 
-- **[Agent skill](#agent-skill)** — teaches an agent to install, start, and talk to GHFS over plain HTTP with the tools it already has. No extra process to run.
+- **[Agent skills](#agent-skills)** — teach an agent to run GHFS and to talk to it over plain HTTP with the tools it already has. No extra process to run.
 - **[MCP server](#mcp-server)** — an [MCP](https://modelcontextprotocol.io/) server exposing list, upload, mkdir, delete, and archive as tools, for clients that prefer a typed tool surface.
 
-## Agent Skill
+## Agent Skills
 
-`skills/ghfs/` documents GHFS itself: how to install it, how to start a local
-instance with the right permissions, and how to drive the HTTP API for listing,
-uploading, creating directories, deleting, and archiving — including the
-failure modes that silently report success.
+Starting a server and using one are usually done by different people, so they
+are two skills:
 
-Link the directory into a skills path your runtime loads, so it tracks the
+- `skills/ghfs-client/` drives a running server over its HTTP API: listing,
+  uploading, creating directories, deleting, and archiving — including the
+  failure modes that silently report success.
+- `skills/ghfs-server/` installs GHFS and starts an instance with the right
+  permissions, listen address, and TLS.
+
+Link the ones you need into a skills path your runtime loads, so they track the
 repository instead of going stale:
 
 ```bash
-ln -s "$PWD/skills/ghfs" ~/.claude/skills/ghfs
+ln -s "$PWD/skills/ghfs-client" ~/.claude/skills/ghfs-client
+ln -s "$PWD/skills/ghfs-server" ~/.claude/skills/ghfs-server
 ```
 
-The link target has to be absolute. Copy the directory instead if you would
-rather pin a version, or point an agent straight at `skills/ghfs/SKILL.md`.
+The link target has to be absolute. Copy the directories instead if you would
+rather pin a version, or point an agent straight at a `SKILL.md`.
 
 ## MCP Server
 
@@ -107,7 +112,7 @@ Upload files or directory structures.
 | `files[].filepath` | string   | Yes      | Relative path (e.g. `file.txt` or `subdir/file.txt`) |
 | `files[].content`  | string   | Yes      | Base64-encoded file content                          |
 
-Files with `/` in `filepath` are uploaded using GHFS `dirfile` mode, which auto-creates intermediate directories.
+Files with `/` in `filepath` are uploaded using GHFS `dirfile` mode, which creates missing intermediate directories. Creating them needs mkdir permission on the target path as well as upload; without it GHFS returns HTTP 500 and writes nothing.
 
 #### `ghfs_mkdir`
 

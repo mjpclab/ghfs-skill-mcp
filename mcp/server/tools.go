@@ -75,7 +75,7 @@ var ListTool = &mcp.Tool{
 // UploadTool defines the ghfs_upload tool for uploading files/directories.
 var UploadTool = &mcp.Tool{
 	Name:        "ghfs_upload",
-	Description: "Upload one or more files to the GHFS server. Supports uploading directory structures by using relative paths with \"/\" in filepath. Files with \"/\" in filepath use \"dirfile\" mode which auto-creates subdirectories.",
+	Description: "Upload one or more files to the GHFS server. Supports uploading directory structures by using relative paths with \"/\" in filepath. Files with \"/\" in filepath use \"dirfile\" mode, which creates missing subdirectories; that needs mkdir permission on the target path as well as upload, otherwise GHFS returns HTTP 500 and writes nothing.",
 }
 
 // MkdirTool defines the ghfs_mkdir tool for creating directories.

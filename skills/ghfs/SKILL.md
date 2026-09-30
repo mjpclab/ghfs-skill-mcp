@@ -105,6 +105,16 @@ Other flags worth knowing: `-r <dir>` sets the served root (default `.`),
 `-l <addr:port>` sets the listen address, `-L -` writes the access log to stdout,
 `--user name:password` with `--global-auth` turns on Basic Auth.
 
+**The IP in `-l` decides who can reach the server.** A value without an IP, such
+as `8080` or `:8080`, listens on every IPv4 and IPv6 interface, so other
+machines can connect. `0.0.0.0` covers IPv4 only and `[::]` IPv6 only. For a
+server only this machine should use, such as a scratch server, bind
+`127.0.0.1:<port>`. Leave the IP out only when other machines are meant to
+reach it.
+
+**Always give a port.** Without one it uses 80, or 443 with TLS, and leaving
+`-l` out entirely means `:80`. A non-root user usually cannot bind either.
+
 A scratch server with everything enabled:
 
 ```bash
@@ -137,6 +147,10 @@ forces cleartext even when certs are supplied.
 ghfs -r /path/to/serve --listen-tls 8443 \
   -c /path/to/server.crt -k /path/to/server.key &
 ```
+
+This example gives no IP, so it listens on all interfaces. That is usually what
+a server with a real certificate wants. For a local-only TLS server, use
+`--listen-tls 127.0.0.1:8443`.
 
 Reach it by the hostname the certificate is issued for, so verification passes
 without `-k`.

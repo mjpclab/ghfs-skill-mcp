@@ -23,7 +23,8 @@ func NewServer(ghfsURL string, debug bool) *mcp.Server {
 		&mcp.ServerOptions{
 			Instructions: fmt.Sprintf(
 				"This MCP server provides tools to interact with a GHFS (Go HTTP File Server) instance at %s. "+
-					"Available operations: list directories, upload files/directories, create directories, delete files/directories.",
+					"Available operations: list directories, upload files/directories, create directories, delete files/directories, "+
+					"generate archive download URLs.",
 				ghfsURL,
 			),
 		},

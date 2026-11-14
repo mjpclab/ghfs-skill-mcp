@@ -35,6 +35,10 @@ ln -s "$PWD/skills/ghfs-server" ~/.agents/skills/ghfs-server
 The link target has to be absolute. Copy the directories instead if you would
 rather pin a version, or point an agent straight at a `SKILL.md`.
 
+Each skill has an `EXAMPLE.md` with prompts that use it:
+[`ghfs-client`](skills/ghfs-client/EXAMPLE.md),
+[`ghfs-server`](skills/ghfs-server/EXAMPLE.md).
+
 ## MCP Server
 
 The Go sources live in `mcp/`.
@@ -174,6 +178,22 @@ Generate an archive download URL for files on the GHFS server.
 | `format`   | string   | Yes      | Archive format: `tar`, `tgz`, or `zip`          |
 | `names`    | string[] | No       | Specific items to include (omit for entire dir) |
 | `filename` | string   | No       | Custom filename for the archive download        |
+
+### Example prompts
+
+The server already knows its GHFS URL, so prompts only name paths:
+
+- "List `/releases/` on GHFS, newest first, and tell me whether I can upload
+  there."
+- "Read `/logs/app.log` from GHFS and summarize the errors."
+- "Look at `/screenshots/bug.png` on GHFS and describe what is wrong in the UI."
+- "Save these meeting notes as `/notes/2026-11-14.md` on GHFS."
+- "Create `/projects/demo/assets` and `/projects/demo/docs` on GHFS."
+- "Give me a zip download link for `/reports/2024/`, named `reports-2024.zip`."
+
+Uploads pass file content through the model as base64, so `ghfs_upload` suits
+small files and content the model writes itself. To push a large local
+directory, use the `ghfs-client` skill, which uploads with `curl`.
 
 ### Client Configuration
 

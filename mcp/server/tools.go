@@ -23,6 +23,7 @@ type ListItem struct {
 	IsDir   bool   `json:"isDir" jsonschema:"Whether the entry is a directory"`
 	Size    int64  `json:"size" jsonschema:"Size in bytes"`
 	ModTime string `json:"modTime" jsonschema:"Last modification time, RFC 3339"`
+	URL     string `json:"url" jsonschema:"Direct URL of the entry; for a file, its download URL"`
 }
 
 // ListOutput is the output of the ghfs_list tool. Its field names follow the
@@ -103,14 +104,14 @@ func schemaFor[T any](tweak func(properties map[string]*jsonschema.Schema)) *jso
 // ListTool defines the ghfs_list tool for listing directory contents.
 var ListTool = &mcp.Tool{
 	Name:        "ghfs_list",
-	Description: "List directory contents on the GHFS server. Returns each entry's name, type, size and modification time, plus which write operations the directory allows.",
+	Description: "List directory contents on the GHFS server. Returns each entry's name, type, size, modification time and direct URL, plus which write operations the directory allows. To download a file rather than read it, fetch its URL directly instead of calling ghfs_read.",
 	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 }
 
 // ReadTool defines the ghfs_read tool for reading a file's content.
 var ReadTool = &mcp.Tool{
 	Name:        "ghfs_read",
-	Description: fmt.Sprintf("Read one file from the GHFS server. Text files return their content, images (PNG, JPEG, GIF, WebP) are returned as an image, and other binary files return only metadata and a download link. Text and image files over %d bytes are refused.", maxReadSize),
+	Description: fmt.Sprintf("Read one file from the GHFS server. Text files return their content, images (PNG, JPEG, GIF, WebP) are returned as an image, and other binary files return only metadata and a download link. Text files over %d bytes and images over %d bytes are refused.", maxTextSize, maxImageSize),
 	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 }
 

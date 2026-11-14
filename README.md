@@ -112,7 +112,8 @@ List directory contents.
 
 Returns structured output: the directory `path`, whether it allows `canUpload`,
 `canMkdir`, `canDelete` and `canArchive`, and `subItems`, each with `name`,
-`isDir`, `size` and `modTime`.
+`isDir`, `size`, `modTime` and `url`. To download a file, fetch its `url`
+directly; `ghfs_read` is for reading content into the model's context.
 
 #### `ghfs_read`
 
@@ -125,12 +126,12 @@ Read one file's content.
 Returns the `path`, `size`, `mimeType`, download `url`, and a `kind`:
 
 - `text` — valid UTF-8; the text is in `content`.
-- `image` — PNG, JPEG, GIF or WebP; returned as image content, so a multimodal
-  model can see it.
+- `image` — PNG, JPEG, GIF or WebP up to 5 MiB; returned as image content, so a
+  multimodal model can see it.
 - `binary` — anything else, at any size; only the metadata and a resource link
   are returned.
 
-Directories, and text or image files over 1 MiB, are refused.
+Directories, text files over 1 MiB, and images over 5 MiB are refused.
 
 #### `ghfs_upload`
 

@@ -2,12 +2,17 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
 )
 
 const testBaseURL = "http://localhost:8080"
 const testBasePath = "/ttt/"
+
+func fixedLimit(n int64) func(string) int64 {
+	return func(string) int64 { return n }
+}
 
 func TestList(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
@@ -64,7 +69,7 @@ func TestListAfterUpload(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
-	f, err := c.read(testBasePath+"_test_mcp_dir/subdir/nested.txt", 1<<20)
+	f, err := c.read(testBasePath+"_test_mcp_dir/subdir/nested.txt", fixedLimit(1<<20))
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
@@ -75,7 +80,7 @@ func TestRead(t *testing.T) {
 
 func TestReadOverLimit(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
-	f, err := c.read(testBasePath+"_test_mcp_dir/hello.txt", 4)
+	f, err := c.read(testBasePath+"_test_mcp_dir/hello.txt", fixedLimit(4))
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
@@ -96,7 +101,7 @@ func TestReadRefusals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := c.read(tt.path, 1<<20); err == nil {
+			if _, err := c.read(tt.path, fixedLimit(1<<20)); err == nil {
 				t.Errorf("read(%q) succeeded, want an error", tt.path)
 			}
 		})
@@ -119,10 +124,20 @@ func TestSpecialCharactersInPaths(t *testing.T) {
 		t.Fatalf("List failed: %v", err)
 	}
 	if len(out.SubItems) != 1 || out.SubItems[0].Name != "a?b#c.txt" {
-		t.Errorf("listing = %+v, want only a?b#c.txt", out.SubItems)
+		t.Fatalf("listing = %+v, want only a?b#c.txt", out.SubItems)
 	}
 
-	f, err := c.read(base+dir+"/a?b#c.txt", 1<<20)
+	resp, err := http.Get(out.SubItems[0].URL)
+	if err != nil {
+		t.Fatalf("Download from listed URL failed: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || string(body) != "special" {
+		t.Errorf("GET %s = %d %q, want 200 %q", out.SubItems[0].URL, resp.StatusCode, body, "special")
+	}
+
+	f, err := c.read(base+dir+"/a?b#c.txt", fixedLimit(1<<20))
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
@@ -133,7 +148,7 @@ func TestSpecialCharactersInPaths(t *testing.T) {
 
 func TestReadDoesNotPassQueryThrough(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
-	if _, err := c.read(testBasePath+"_test_mcp_dir?zip", 1<<20); err == nil {
+	if _, err := c.read(testBasePath+"_test_mcp_dir?zip", fixedLimit(1<<20)); err == nil {
 		t.Error("read with ?zip in the path succeeded, want not found")
 	}
 }

@@ -44,8 +44,12 @@ func (h *Handler) HandleList(ctx context.Context, req *mcp.CallToolRequest, in L
 	return nil, *out, nil
 }
 
-// maxReadSize caps how much of a file ghfs_read returns, to protect the model's context.
-const maxReadSize = 1 << 20
+// Size caps for ghfs_read. Text fills the model's context in proportion to its
+// size; an image costs context by its pixel dimensions, so it can be larger.
+const (
+	maxTextSize  = 1 << 20
+	maxImageSize = 5 << 20
+)
 
 // imageTypes are the image formats ghfs_read hands to the model as images.
 var imageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
@@ -53,7 +57,7 @@ var imageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
 // HandleRead handles the ghfs_read tool call. Text is returned in the output,
 // images as image content, and other binary files only as a link, whatever their size.
 func (h *Handler) HandleRead(ctx context.Context, req *mcp.CallToolRequest, in ReadInput) (*mcp.CallToolResult, ReadOutput, error) {
-	f, err := h.client.read(in.Path, maxReadSize)
+	f, err := h.client.read(in.Path, readLimit)
 	if err != nil {
 		return nil, ReadOutput{}, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -65,7 +69,7 @@ func (h *Handler) HandleRead(ctx context.Context, req *mcp.CallToolRequest, in R
 	if f.data == nil {
 		// Text and images are worth reading but too big; anything else just gets a link.
 		if isImage || strings.HasPrefix(mediaType, "text/") || params["charset"] != "" {
-			return nil, ReadOutput{}, fmt.Errorf("%s is %d bytes, over the %d byte limit; download it from %s", in.Path, f.size, maxReadSize, f.url)
+			return nil, ReadOutput{}, fmt.Errorf("%s is %d bytes, over the %d byte limit; download it from %s", in.Path, f.size, readLimit(f.mimeType), f.url)
 		}
 		return binaryResult(f, mediaType, out)
 	}
@@ -85,6 +89,15 @@ func (h *Handler) HandleRead(ctx context.Context, req *mcp.CallToolRequest, in R
 	default:
 		return binaryResult(f, mediaType, out)
 	}
+}
+
+// readLimit returns the ghfs_read size cap for a Content-Type.
+func readLimit(contentType string) int64 {
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	if slices.Contains(imageTypes, mediaType) {
+		return maxImageSize
+	}
+	return maxTextSize
 }
 
 // binaryResult describes a binary file by its metadata and a link, without its content.

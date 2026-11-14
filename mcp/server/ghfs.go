@@ -62,6 +62,13 @@ func (c *ghfsClient) list(path string, sort string) (*ListOutput, error) {
 	if err := c.getJSON(u, &out); err != nil {
 		return nil, err
 	}
+	for i, item := range out.SubItems {
+		itemPath := normalizePath(path) + item.Name
+		if item.IsDir {
+			itemPath += "/"
+		}
+		out.SubItems[i].URL = c.urlFor(itemPath)
+	}
 	return &out, nil
 }
 
@@ -73,9 +80,10 @@ type fileContent struct {
 	data     []byte
 }
 
-// read downloads the file at path, refusing directories. A file larger than
-// maxSize is not downloaded; only its metadata is returned.
-func (c *ghfsClient) read(path string, maxSize int64) (*fileContent, error) {
+// read downloads the file at path, refusing directories. limit gives the size
+// cap for the file's Content-Type; a file over it is not downloaded, and only
+// its metadata is returned.
+func (c *ghfsClient) read(path string, limit func(contentType string) int64) (*fileContent, error) {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
@@ -109,6 +117,7 @@ func (c *ghfsClient) read(path string, maxSize int64) (*fileContent, error) {
 	}
 
 	f := &fileContent{url: u, mimeType: resp.Header.Get("Content-Type"), size: meta.Item.Size}
+	maxSize := limit(f.mimeType)
 	if f.size > maxSize {
 		return f, nil
 	}

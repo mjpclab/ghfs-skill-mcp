@@ -48,9 +48,16 @@ cd mcp && go test ./...
 
 GHFS is read-only by default. Omitting `-U --global-mkdir --global-delete -A` gives HTTP 400 on the write tests rather than a connection error.
 
+The tests run in source order and share state: `TestMkdir` creates `/ttt/_test_mcp_dir/`, later tests use what `TestUpload` put there, and `TestDelete` removes it. Running one test alone with `-run` usually fails with HTTP 404, so include its setup and teardown:
+
+```bash
+go test -v ./server -run '^(TestMkdir|TestUpload|TestRead|TestDelete)$'
+```
+
 ## Conventions
 
-- Every request to GHFS sends `Accept: application/json`; without it the server returns its HTML browser UI.
+- Every request to GHFS sends `Accept: application/json`; without it the server returns its HTML browser UI. The one exception is fetching a file's content in `ghfs_read`, where the header would return the file's metadata instead.
+- Build GHFS URLs with `urlFor`, which percent-encodes the path. A raw path breaks on names containing `?`, `#` or `%`.
 - `mkdir` and `delete` are urlencoded, `upload` is multipart. Sending the wrong encoding returns HTTP 200 and `{"success":true}` while doing nothing.
 - Uploads with a `/` in the path use the `dirfile` form field, which creates intermediate directories. `file` strips the path entirely.
 
@@ -59,3 +66,11 @@ GHFS is read-only by default. Omitting `-U --global-mkdir --global-delete -A` gi
 ## When changing tools
 
 Adding or changing an MCP tool means touching three places: the definition in `tools.go`, the handler in `handler.go`, and its registration in `NewServer` in `server.go`. Update the tool table in `README.md` in the same change.
+
+Tools are bound with the SDK's generic `mcp.AddTool`:
+
+- The input schema is inferred from the tool's `*Input` struct: a `jsonschema` tag is the description, and a field without `omitempty` is required. Constraints a tag cannot express, such as an enum, go through `schemaFor`.
+- A handler with a concrete output type gets an output schema, and the SDK fills both `structuredContent` and the text content from it. `ListOutput` is decoded straight from GHFS's JSON, so its field names follow GHFS.
+- A returned error becomes a tool result with `isError`, not a protocol error.
+
+HTTP mode runs the streamable handler stateless, which protocol `2026-07-28` requires. Tools therefore cannot make requests back to the client, such as sampling or elicitation.

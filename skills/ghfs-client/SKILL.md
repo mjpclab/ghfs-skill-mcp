@@ -79,6 +79,25 @@ Sort keys: `n` name, `e` extension, `s` size, `t` time, `_` unsorted. Uppercase
 reverses. A leading `/` puts directories first, a trailing `/` puts them last.
 So `?sort=/T` means directories first, newest first.
 
+### Download a file
+
+A plain GET on the file's URL, without `Accept: application/json`; with it, GHFS
+returns the file's metadata instead of its content.
+
+```bash
+curl -s -o report.pdf "$BASE/reports/report.pdf"
+```
+
+A listing gives only each entry's `name`, so the URL is the directory URL plus
+the name, percent-encoded: `a?b.txt` becomes `a%3Fb.txt`, `e f.txt` becomes
+`e%20f.txt`. Left unencoded, `?` and `#` cut the path short (HTTP 404), `%` is
+read as an escape (HTTP 400), and curl rejects a space outright. To encode a
+name:
+
+```bash
+python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$name"
+```
+
 ### Create directories
 
 Urlencoded, one `name` per directory. Nested paths are allowed. `curl --data`
@@ -193,3 +212,4 @@ of HTML and 782 bytes of JSON.
 | POST to a not-yet-existing directory | HTTP 400 | POST to the parent, put the subpath in the filename |
 | Treating HTTP 400 as a bad request to retry | it usually means the operation is not permitted there | check `can*` in the listing; if false, the server has to be restarted with the flag |
 | `Accept: application/json` when downloading a file | returns the file's metadata, not its content | omit the header for file downloads |
+| `?`, `#`, `%` or a space left raw in a file URL | HTTP 404 or 400, or curl refuses the URL | percent-encode the name |

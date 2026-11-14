@@ -11,11 +11,14 @@ const testBasePath = "/ttt/"
 
 func TestList(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
-	data, err := c.list(testBasePath, "")
+	out, err := c.list(testBasePath, "")
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
-	fmt.Printf("List %s: %s\n", testBasePath, string(data))
+	if out.Path != testBasePath {
+		t.Errorf("path = %q, want %q", out.Path, testBasePath)
+	}
+	fmt.Printf("List %s: %+v\n", testBasePath, *out)
 }
 
 func TestMkdir(t *testing.T) {
@@ -42,11 +45,21 @@ func TestUpload(t *testing.T) {
 
 func TestListAfterUpload(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
-	data, err := c.list(testBasePath+"_test_mcp_dir/", "")
+	out, err := c.list(testBasePath+"_test_mcp_dir/", "")
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
-	fmt.Printf("List %s_test_mcp_dir/: %s\n", testBasePath, string(data))
+	got := map[string]bool{}
+	for _, item := range out.SubItems {
+		got[item.Name] = item.IsDir
+	}
+	if isDir, ok := got["hello.txt"]; !ok || isDir {
+		t.Errorf("want file hello.txt in %+v", out.SubItems)
+	}
+	if isDir, ok := got["subdir"]; !ok || !isDir {
+		t.Errorf("want directory subdir in %+v", out.SubItems)
+	}
+	fmt.Printf("List %s_test_mcp_dir/: %+v\n", testBasePath, *out)
 }
 
 func TestDelete(t *testing.T) {

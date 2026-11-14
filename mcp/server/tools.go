@@ -17,6 +17,25 @@ type ListInput struct {
 	Sort string `json:"sort,omitempty" jsonschema:"Sort order for directory listing. Key: \"n\" name, \"e\" extension/type, \"s\" size, \"t\" time, \"_\" no sort. Uppercase reverses order (e.g. \"N\" name desc). Prefix \"/\" puts dirs first (e.g. \"/n\"), suffix \"/\" puts dirs last (e.g. \"n/\"). Examples: \"/T\" (dirs first, time desc), \"n\" (name asc), \"S\" (size desc)."`
 }
 
+// ListItem is one entry of a directory listing.
+type ListItem struct {
+	Name    string `json:"name" jsonschema:"Entry name"`
+	IsDir   bool   `json:"isDir" jsonschema:"Whether the entry is a directory"`
+	Size    int64  `json:"size" jsonschema:"Size in bytes"`
+	ModTime string `json:"modTime" jsonschema:"Last modification time, RFC 3339"`
+}
+
+// ListOutput is the output of the ghfs_list tool. Its field names follow the
+// GHFS JSON listing, which is decoded into it directly; UI-only fields are dropped.
+type ListOutput struct {
+	Path       string     `json:"path" jsonschema:"Listed directory path"`
+	CanUpload  bool       `json:"canUpload" jsonschema:"Whether uploading to this directory is allowed"`
+	CanMkdir   bool       `json:"canMkdir" jsonschema:"Whether creating directories here is allowed"`
+	CanDelete  bool       `json:"canDelete" jsonschema:"Whether deleting entries here is allowed"`
+	CanArchive bool       `json:"canArchive" jsonschema:"Whether archiving this directory is allowed"`
+	SubItems   []ListItem `json:"subItems" jsonschema:"Directory entries, in the requested sort order"`
+}
+
 // UploadFileInput describes a single file within an upload request.
 type UploadFileInput struct {
 	Filepath string `json:"filepath" jsonschema:"Relative file path including filename. Use \"/\" for directory structure, e.g. \"subdir/file.txt\""`
@@ -69,7 +88,7 @@ func schemaFor[T any](tweak func(properties map[string]*jsonschema.Schema)) *jso
 // ListTool defines the ghfs_list tool for listing directory contents.
 var ListTool = &mcp.Tool{
 	Name:        "ghfs_list",
-	Description: "List directory contents on the GHFS server. Returns JSON with file/directory names, sizes, modification times, and types.",
+	Description: "List directory contents on the GHFS server. Returns each entry's name, type, size and modification time, plus which write operations the directory allows.",
 	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 }
 

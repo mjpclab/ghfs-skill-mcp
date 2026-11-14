@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -32,21 +31,13 @@ func textResult(text string) *mcp.CallToolResult {
 }
 
 // HandleList handles the ghfs_list tool call.
-func (h *Handler) HandleList(ctx context.Context, req *mcp.CallToolRequest, in ListInput) (*mcp.CallToolResult, any, error) {
-	data, err := h.client.list(in.Path, in.Sort)
+// The SDK puts the output in StructuredContent and its JSON encoding in Content.
+func (h *Handler) HandleList(ctx context.Context, req *mcp.CallToolRequest, in ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	out, err := h.client.list(in.Path, in.Sort)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list directory: %w", err)
+		return nil, ListOutput{}, fmt.Errorf("failed to list directory: %w", err)
 	}
-
-	// Pretty-print JSON for better readability
-	var raw json.RawMessage
-	if err := json.Unmarshal(data, &raw); err == nil {
-		if pretty, err := json.MarshalIndent(raw, "", "  "); err == nil {
-			data = pretty
-		}
-	}
-
-	return textResult(string(data)), nil, nil
+	return nil, *out, nil
 }
 
 // HandleUpload handles the ghfs_upload tool call.

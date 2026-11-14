@@ -109,6 +109,10 @@ List directory contents.
 | `path`    | string | Yes      | Directory path, e.g. `/` or `/docs/` |
 | `sort`    | string | No       | Sort order, e.g. `/T`, `n`, `S`      |
 
+Returns structured output: the directory `path`, whether it allows `canUpload`,
+`canMkdir`, `canDelete` and `canArchive`, and `subItems`, each with `name`,
+`isDir`, `size` and `modTime`.
+
 #### `ghfs_upload`
 
 Upload files or directory structures.

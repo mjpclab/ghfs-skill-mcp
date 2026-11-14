@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -44,8 +45,8 @@ func normalizePath(path string) string {
 	return path
 }
 
-// list retrieves the directory listing at the given path in JSON format.
-func (c *ghfsClient) list(path string, sort string) ([]byte, error) {
+// list retrieves the directory listing at the given path.
+func (c *ghfsClient) list(path string, sort string) (*ListOutput, error) {
 	path = normalizePath(path)
 
 	u := c.baseURL + path
@@ -74,7 +75,11 @@ func (c *ghfsClient) list(path string, sort string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	return body, nil
+	var out ListOutput
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode listing: %w", err)
+	}
+	return &out, nil
 }
 
 // upload uploads one or more files to the given path on GHFS.

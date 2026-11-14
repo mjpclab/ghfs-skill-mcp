@@ -36,6 +36,21 @@ type ListOutput struct {
 	SubItems   []ListItem `json:"subItems" jsonschema:"Directory entries, in the requested sort order"`
 }
 
+// ReadInput is the input for the ghfs_read tool.
+type ReadInput struct {
+	Path string `json:"path" jsonschema:"File path, e.g. \"/docs/readme.md\""`
+}
+
+// ReadOutput is the output of the ghfs_read tool.
+type ReadOutput struct {
+	Path     string `json:"path" jsonschema:"File path that was read"`
+	Size     int64  `json:"size" jsonschema:"File size in bytes"`
+	MIMEType string `json:"mimeType" jsonschema:"Content type reported by GHFS"`
+	Kind     string `json:"kind" jsonschema:"\"text\", \"image\" or \"binary\""`
+	URL      string `json:"url" jsonschema:"Direct download URL of the file"`
+	Content  string `json:"content,omitempty" jsonschema:"File text; present only when kind is \"text\""`
+}
+
 // UploadFileInput describes a single file within an upload request.
 type UploadFileInput struct {
 	Filepath string `json:"filepath" jsonschema:"Relative file path including filename. Use \"/\" for directory structure, e.g. \"subdir/file.txt\""`
@@ -89,6 +104,13 @@ func schemaFor[T any](tweak func(properties map[string]*jsonschema.Schema)) *jso
 var ListTool = &mcp.Tool{
 	Name:        "ghfs_list",
 	Description: "List directory contents on the GHFS server. Returns each entry's name, type, size and modification time, plus which write operations the directory allows.",
+	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
+}
+
+// ReadTool defines the ghfs_read tool for reading a file's content.
+var ReadTool = &mcp.Tool{
+	Name:        "ghfs_read",
+	Description: fmt.Sprintf("Read one file from the GHFS server. Text files return their content, images (PNG, JPEG, GIF, WebP) are returned as an image, and other binary files return only metadata and a download link. Text and image files over %d bytes are refused.", maxReadSize),
 	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 }
 

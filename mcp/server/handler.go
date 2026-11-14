@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"mime"
+	"path"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -38,6 +42,58 @@ func (h *Handler) HandleList(ctx context.Context, req *mcp.CallToolRequest, in L
 		return nil, ListOutput{}, fmt.Errorf("failed to list directory: %w", err)
 	}
 	return nil, *out, nil
+}
+
+// maxReadSize caps how much of a file ghfs_read returns, to protect the model's context.
+const maxReadSize = 1 << 20
+
+// imageTypes are the image formats ghfs_read hands to the model as images.
+var imageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+// HandleRead handles the ghfs_read tool call. Text is returned in the output,
+// images as image content, and other binary files only as a link, whatever their size.
+func (h *Handler) HandleRead(ctx context.Context, req *mcp.CallToolRequest, in ReadInput) (*mcp.CallToolResult, ReadOutput, error) {
+	f, err := h.client.read(in.Path, maxReadSize)
+	if err != nil {
+		return nil, ReadOutput{}, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	mediaType, params, _ := mime.ParseMediaType(f.mimeType)
+	isImage := slices.Contains(imageTypes, mediaType)
+	out := ReadOutput{Path: in.Path, Size: f.size, MIMEType: f.mimeType, URL: f.url}
+
+	if f.data == nil {
+		// Text and images are worth reading but too big; anything else just gets a link.
+		if isImage || strings.HasPrefix(mediaType, "text/") || params["charset"] != "" {
+			return nil, ReadOutput{}, fmt.Errorf("%s is %d bytes, over the %d byte limit; download it from %s", in.Path, f.size, maxReadSize, f.url)
+		}
+		return binaryResult(f, mediaType, out)
+	}
+
+	switch {
+	case isImage:
+		out.Kind = "image"
+		return &mcp.CallToolResult{Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("%s: %s image, %d bytes", in.Path, mediaType, f.size)},
+			&mcp.ImageContent{Data: f.data, MIMEType: mediaType},
+		}}, out, nil
+
+	case utf8.Valid(f.data):
+		out.Kind, out.Content = "text", string(f.data)
+		return nil, out, nil
+
+	default:
+		return binaryResult(f, mediaType, out)
+	}
+}
+
+// binaryResult describes a binary file by its metadata and a link, without its content.
+func binaryResult(f *fileContent, mediaType string, out ReadOutput) (*mcp.CallToolResult, ReadOutput, error) {
+	out.Kind = "binary"
+	return &mcp.CallToolResult{Content: []mcp.Content{
+		&mcp.TextContent{Text: fmt.Sprintf("%s: binary file (%s, %d bytes), content not returned. Download it from %s", out.Path, f.mimeType, f.size, f.url)},
+		&mcp.ResourceLink{URI: f.url, Name: path.Base(out.Path), MIMEType: mediaType, Size: &f.size},
+	}}, out, nil
 }
 
 // HandleUpload handles the ghfs_upload tool call.

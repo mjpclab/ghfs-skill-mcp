@@ -3,7 +3,7 @@
 Two ways to let an AI assistant drive [GHFS (Go HTTP File Server)](https://github.com/mjpclab/go-http-file-server):
 
 - **[Agent skills](#agent-skills)** — teach an agent to run GHFS and to talk to it over plain HTTP with the tools it already has. No extra process to run.
-- **[MCP server](#mcp-server)** — an [MCP](https://modelcontextprotocol.io/) server exposing list, upload, mkdir, delete, and archive as tools, for clients that prefer a typed tool surface.
+- **[MCP server](#mcp-server)** — an [MCP](https://modelcontextprotocol.io/) server exposing list, read, upload, mkdir, delete, and archive as tools, for clients that prefer a typed tool surface.
 
 ## Agent Skills
 
@@ -42,6 +42,7 @@ The Go sources live in `mcp/`.
 ### Features
 
 - **List directories** — browse GHFS directories with sorting support
+- **Read files** — read a text file, view an image, or get a link to other files
 - **Upload files/directories** — upload single files, multiple files, or entire directory structures
 - **Create directories** — create one or more directories, including nested paths
 - **Delete files/directories** — remove files or directories recursively
@@ -112,6 +113,24 @@ List directory contents.
 Returns structured output: the directory `path`, whether it allows `canUpload`,
 `canMkdir`, `canDelete` and `canArchive`, and `subItems`, each with `name`,
 `isDir`, `size` and `modTime`.
+
+#### `ghfs_read`
+
+Read one file's content.
+
+| Parameter | Type   | Required | Description                         |
+| --------- | ------ | -------- | ----------------------------------- |
+| `path`    | string | Yes      | File path, e.g. `/docs/readme.md`   |
+
+Returns the `path`, `size`, `mimeType`, download `url`, and a `kind`:
+
+- `text` — valid UTF-8; the text is in `content`.
+- `image` — PNG, JPEG, GIF or WebP; returned as image content, so a multimodal
+  model can see it.
+- `binary` — anything else, at any size; only the metadata and a resource link
+  are returned.
+
+Directories, and text or image files over 1 MiB, are refused.
 
 #### `ghfs_upload`
 

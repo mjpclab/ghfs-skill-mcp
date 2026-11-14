@@ -47,39 +47,103 @@ func normalizePath(path string) string {
 
 // list retrieves the directory listing at the given path.
 func (c *ghfsClient) list(path string, sort string) (*ListOutput, error) {
-	path = normalizePath(path)
-
-	u := c.baseURL + path
+	u := c.baseURL + normalizePath(path)
 	if sort != "" {
 		u += "?sort=" + url.QueryEscape(sort)
 	}
 
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+	var out ListOutput
+	if err := c.getJSON(u, &out); err != nil {
+		return nil, err
 	}
-	req.Header.Set("Accept", "application/json")
+	return &out, nil
+}
 
-	resp, err := c.httpClient.Do(req)
+// fileContent is a file read from GHFS. data is nil when the file is over the size limit.
+type fileContent struct {
+	url      string
+	mimeType string
+	size     int64
+	data     []byte
+}
+
+// read downloads the file at path, refusing directories. A file larger than
+// maxSize is not downloaded; only its metadata is returned.
+func (c *ghfsClient) read(path string, maxSize int64) (*fileContent, error) {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if strings.HasSuffix(path, "/") {
+		return nil, fmt.Errorf("%s is a directory", path)
+	}
+	u := c.baseURL + path
+
+	// With Accept: application/json GHFS returns the entry's metadata instead of its content.
+	var meta struct {
+		Item ListItem `json:"item"`
+	}
+	if err := c.getJSON(u, &meta); err != nil {
+		return nil, err
+	}
+	if meta.Item.IsDir {
+		return nil, fmt.Errorf("%s is a directory", path)
+	}
+
+	// The content request also supplies the Content-Type, so it is sent even
+	// for an oversized file, whose body is then left unread.
+	resp, err := c.httpClient.Get(u)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	var out ListOutput
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("decode listing: %w", err)
+	f := &fileContent{url: u, mimeType: resp.Header.Get("Content-Type"), size: meta.Item.Size}
+	if f.size > maxSize {
+		return f, nil
 	}
-	return &out, nil
+
+	// The limit guards against the file growing between the two requests.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if int64(len(data)) <= maxSize {
+		f.size, f.data = int64(len(data)), data
+	}
+	return f, nil
+}
+
+// getJSON sends a GET with Accept: application/json and decodes the response into v.
+func (c *ghfsClient) getJSON(u string, v any) error {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.Unmarshal(body, v); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	return nil
 }
 
 // upload uploads one or more files to the given path on GHFS.

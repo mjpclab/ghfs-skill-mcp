@@ -62,6 +62,47 @@ func TestListAfterUpload(t *testing.T) {
 	fmt.Printf("List %s_test_mcp_dir/: %+v\n", testBasePath, *out)
 }
 
+func TestRead(t *testing.T) {
+	c := newGHFSClient(testBaseURL)
+	f, err := c.read(testBasePath+"_test_mcp_dir/subdir/nested.txt", 1<<20)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := string(f.data); got != "Nested file content" {
+		t.Errorf("content = %q, want %q", got, "Nested file content")
+	}
+}
+
+func TestReadOverLimit(t *testing.T) {
+	c := newGHFSClient(testBaseURL)
+	f, err := c.read(testBasePath+"_test_mcp_dir/hello.txt", 4)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if f.data != nil || f.size != int64(len("Hello from MCP server test!")) {
+		t.Errorf("got data %q, size %d; want no data and the full size", f.data, f.size)
+	}
+}
+
+func TestReadRefusals(t *testing.T) {
+	c := newGHFSClient(testBaseURL)
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"directory", testBasePath + "_test_mcp_dir/subdir"},
+		{"directory with slash", testBasePath + "_test_mcp_dir/subdir/"},
+		{"missing", testBasePath + "_test_mcp_dir/missing.txt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := c.read(tt.path, 1<<20); err == nil {
+				t.Errorf("read(%q) succeeded, want an error", tt.path)
+			}
+		})
+	}
+}
+
 func TestDelete(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
 	err := c.delete(testBasePath, []string{"_test_mcp_dir"})

@@ -103,6 +103,41 @@ func TestReadRefusals(t *testing.T) {
 	}
 }
 
+func TestSpecialCharactersInPaths(t *testing.T) {
+	c := newGHFSClient(testBaseURL)
+	base := testBasePath + "_test_mcp_dir/"
+	dir := "q?h#s %"
+	if err := c.mkdir(base, []string{dir}); err != nil {
+		t.Fatalf("Mkdir failed: %v", err)
+	}
+	if err := c.upload(base+dir+"/", []uploadFile{{filepath: "a?b#c.txt", content: []byte("special")}}); err != nil {
+		t.Fatalf("Upload failed: %v", err)
+	}
+
+	out, err := c.list(base+dir, "")
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(out.SubItems) != 1 || out.SubItems[0].Name != "a?b#c.txt" {
+		t.Errorf("listing = %+v, want only a?b#c.txt", out.SubItems)
+	}
+
+	f, err := c.read(base+dir+"/a?b#c.txt", 1<<20)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if string(f.data) != "special" {
+		t.Errorf("content = %q, want %q", f.data, "special")
+	}
+}
+
+func TestReadDoesNotPassQueryThrough(t *testing.T) {
+	c := newGHFSClient(testBaseURL)
+	if _, err := c.read(testBasePath+"_test_mcp_dir?zip", 1<<20); err == nil {
+		t.Error("read with ?zip in the path succeeded, want not found")
+	}
+}
+
 func TestDelete(t *testing.T) {
 	c := newGHFSClient(testBaseURL)
 	err := c.delete(testBasePath, []string{"_test_mcp_dir"})

@@ -34,6 +34,12 @@ func newGHFSClient(baseURL string) *ghfsClient {
 	}
 }
 
+// urlFor returns the URL of path on the server. Escaping keeps characters such
+// as "?" and "#" in file names from being read as a query or fragment.
+func (c *ghfsClient) urlFor(path string) string {
+	return c.baseURL + (&url.URL{Path: path}).EscapedPath()
+}
+
 // normalizePath ensures the path starts with "/" and ends with "/".
 func normalizePath(path string) string {
 	if !strings.HasPrefix(path, "/") {
@@ -47,7 +53,7 @@ func normalizePath(path string) string {
 
 // list retrieves the directory listing at the given path.
 func (c *ghfsClient) list(path string, sort string) (*ListOutput, error) {
-	u := c.baseURL + normalizePath(path)
+	u := c.urlFor(normalizePath(path))
 	if sort != "" {
 		u += "?sort=" + url.QueryEscape(sort)
 	}
@@ -76,7 +82,7 @@ func (c *ghfsClient) read(path string, maxSize int64) (*fileContent, error) {
 	if strings.HasSuffix(path, "/") {
 		return nil, fmt.Errorf("%s is a directory", path)
 	}
-	u := c.baseURL + path
+	u := c.urlFor(path)
 
 	// With Accept: application/json GHFS returns the entry's metadata instead of its content.
 	var meta struct {
@@ -118,6 +124,9 @@ func (c *ghfsClient) read(path string, maxSize int64) (*fileContent, error) {
 	return f, nil
 }
 
+// maxJSONSize caps a JSON response; even very large directory listings fit well within it.
+const maxJSONSize = 32 << 20
+
 // getJSON sends a GET with Accept: application/json and decodes the response into v.
 func (c *ghfsClient) getJSON(u string, v any) error {
 	req, err := http.NewRequest("GET", u, nil)
@@ -132,9 +141,12 @@ func (c *ghfsClient) getJSON(u string, v any) error {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONSize+1))
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
+	}
+	if len(body) > maxJSONSize {
+		return fmt.Errorf("response exceeds %d bytes", maxJSONSize)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
@@ -151,7 +163,7 @@ func (c *ghfsClient) getJSON(u string, v any) error {
 // Files without "/" in their filepath are uploaded as "file" (flat).
 func (c *ghfsClient) upload(path string, files []uploadFile) error {
 	path = normalizePath(path)
-	u := c.baseURL + path + "?upload"
+	u := c.urlFor(path) + "?upload"
 
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
@@ -203,7 +215,7 @@ func (c *ghfsClient) upload(path string, files []uploadFile) error {
 // mkdir creates one or more directories under the given path.
 func (c *ghfsClient) mkdir(path string, names []string) error {
 	path = normalizePath(path)
-	u := c.baseURL + path + "?mkdir"
+	u := c.urlFor(path) + "?mkdir"
 
 	form := url.Values{}
 	for _, name := range names {
@@ -238,7 +250,7 @@ func (c *ghfsClient) mkdir(path string, names []string) error {
 // delete deletes one or more files or directories under the given path.
 func (c *ghfsClient) delete(path string, names []string) error {
 	path = normalizePath(path)
-	u := c.baseURL + path + "?delete"
+	u := c.urlFor(path) + "?delete"
 
 	form := url.Values{}
 	for _, name := range names {
@@ -273,7 +285,7 @@ func (c *ghfsClient) delete(path string, names []string) error {
 // archiveURL constructs a download URL for archiving files at the given path.
 func (c *ghfsClient) archiveURL(path string, format string, names []string, filename string) string {
 	path = normalizePath(path)
-	u := c.baseURL + path + "?" + url.QueryEscape(format)
+	u := c.urlFor(path) + "?" + url.QueryEscape(format)
 	if filename != "" {
 		u += "=" + url.QueryEscape(filename)
 	}

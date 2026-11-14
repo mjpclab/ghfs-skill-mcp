@@ -42,7 +42,8 @@ func main() {
 		}
 
 	case "http":
-		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, nil)
+		// Stateless is required for protocol 2026-07-28; the tools never call back to the client.
+		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true})
 		log.Printf("Starting %s %s in HTTP mode on %s (GHFS: %s)\n", mcpserver.ServerName, mcpserver.ServerVersion, *addr, *ghfsURL)
 
 		var err error

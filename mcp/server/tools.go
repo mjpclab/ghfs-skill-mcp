@@ -70,30 +70,35 @@ func schemaFor[T any](tweak func(properties map[string]*jsonschema.Schema)) *jso
 var ListTool = &mcp.Tool{
 	Name:        "ghfs_list",
 	Description: "List directory contents on the GHFS server. Returns JSON with file/directory names, sizes, modification times, and types.",
+	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 }
 
 // UploadTool defines the ghfs_upload tool for uploading files/directories.
 var UploadTool = &mcp.Tool{
 	Name:        "ghfs_upload",
 	Description: "Upload one or more files to the GHFS server. Supports uploading directory structures by using relative paths with \"/\" in filepath. Files with \"/\" in filepath use \"dirfile\" mode, which creates missing subdirectories; that needs mkdir permission on the target path as well as upload, otherwise GHFS returns HTTP 500 and writes nothing.",
+	Annotations: &mcp.ToolAnnotations{IdempotentHint: true, OpenWorldHint: new(false)},
 }
 
 // MkdirTool defines the ghfs_mkdir tool for creating directories.
 var MkdirTool = &mcp.Tool{
 	Name:        "ghfs_mkdir",
 	Description: "Create one or more directories on the GHFS server. Supports creating nested directories like \"foo/bar/baz\".",
+	Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false), IdempotentHint: true, OpenWorldHint: new(false)},
 }
 
 // DeleteTool defines the ghfs_delete tool for deleting files/directories.
 var DeleteTool = &mcp.Tool{
 	Name:        "ghfs_delete",
 	Description: "Delete one or more files or directories on the GHFS server. Directories are deleted recursively.",
+	Annotations: &mcp.ToolAnnotations{IdempotentHint: true, OpenWorldHint: new(false)},
 }
 
 // ArchiveTool defines the ghfs_archive tool for archiving files/directories.
 var ArchiveTool = &mcp.Tool{
 	Name:        "ghfs_archive",
 	Description: "Archive (download as package) files or directories on the GHFS server. Returns a download URL for the archive. Supports tar, tgz and zip formats.",
+	Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
 	InputSchema: schemaFor[ArchiveInput](func(properties map[string]*jsonschema.Schema) {
 		properties["format"].Enum = archiveFormats
 	}),

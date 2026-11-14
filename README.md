@@ -17,11 +17,19 @@ are two skills:
   permissions, listen address, and TLS.
 
 Link the ones you need into a skills path your runtime loads, so they track the
-repository instead of going stale:
+repository instead of going stale. For Claude Code:
 
 ```bash
 ln -s "$PWD/skills/ghfs-client" ~/.claude/skills/ghfs-client
 ln -s "$PWD/skills/ghfs-server" ~/.claude/skills/ghfs-server
+```
+
+For Codex, OpenCode, Gemini CLI, Cursor, and other tools that read
+`~/.agents/skills`:
+
+```bash
+ln -s "$PWD/skills/ghfs-client" ~/.agents/skills/ghfs-client
+ln -s "$PWD/skills/ghfs-server" ~/.agents/skills/ghfs-server
 ```
 
 The link target has to be absolute. Copy the directories instead if you would
@@ -147,7 +155,12 @@ Generate an archive download URL for files on the GHFS server.
 
 #### Claude Desktop
 
-STDIO mode — add to `claude_desktop_config.json`:
+STDIO mode — add to `claude_desktop_config.json`, which you can open from
+Settings > Developer > Edit Config:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -160,16 +173,21 @@ STDIO mode — add to `claude_desktop_config.json`:
 }
 ```
 
+`command` must be an absolute path. Quit Claude Desktop completely and restart
+it to load the change.
+
 #### VS Code (Copilot)
 
-config file is `.vscode/mcp.json` (project scope) or `~/.config/Code/User/mcp.json` (user scope).
+The config file is `~/.copilot/mcp-config.json`, or `$COPILOT_HOME/mcp-config.json`
+if `COPILOT_HOME` is set.
 
 STDIO mode:
 
 ```json
 {
-  "servers": {
+  "mcpServers": {
     "ghfs": {
+      "type": "stdio",
       "command": "/path/to/ghfs-mcp-server",
       "args": ["-ghfs-url", "http://localhost:8080"]
     }
@@ -181,7 +199,7 @@ HTTP mode:
 
 ```json
 {
-  "servers": {
+  "mcpServers": {
     "ghfs": {
       "type": "http",
       "url": "http://localhost:9090/"
